@@ -101,3 +101,115 @@
     endorser-type: (string-ascii 32),
   }
 )
+
+;; Institutional authority delegation framework
+(define-map institution-delegates
+  {
+    institution: principal,
+    delegate: principal,
+  }
+  {
+    active: bool,
+    permissions: (list 10 (string-ascii 32)),
+    added-at: uint,
+    expiry: uint,
+  }
+)
+
+;; Secure credential ownership transfer system
+(define-map transfer-requests
+  uint
+  {
+    credential-id: (string-ascii 64),
+    old-owner: principal,
+    new-owner: principal,
+    status: (string-ascii 16),
+    request-time: uint,
+    expiry-time: uint,
+    transfer-type: (string-ascii 32),
+  }
+)
+
+;; INPUT VALIDATION & SECURITY LAYER
+
+(define-private (validate-non-empty-string (input (string-ascii 64)))
+  (> (len input) u0)
+)
+
+(define-private (validate-url (url (string-ascii 256)))
+  ;; Ensures metadata URL integrity
+  (> (len url) u0)
+)
+
+(define-private (validate-year (year uint))
+  ;; Academic year validation range
+  (and
+    (> year u1900)
+    (< year (+ u2100 u1))
+  )
+)
+
+(define-private (validate-expiry (expiry uint))
+  (> expiry stacks-block-height)
+)
+
+(define-private (validate-credential-id (credential-id (string-ascii 64)))
+  ;; Unique identifier validation
+  (> (len credential-id) u0)
+)
+
+(define-private (validate-permissions (permissions (list 10 (string-ascii 32))))
+  ;; Permission list integrity check
+  (> (len permissions) u0)
+)
+
+(define-private (validate-endorsement-weight (weight uint))
+  ;; Endorsement weight validation (1-100 scale)
+  (and
+    (>= weight u1)
+    (<= weight u100)
+  )
+)
+
+(define-private (validate-principal (address principal))
+  (not (is-eq address tx-sender))
+  ;; Prevents self-delegation
+)
+
+(define-private (validate-student (student-address principal))
+  (not (is-eq student-address tx-sender))
+  ;; Prevents self-issuance
+)
+
+(define-private (validate-comment (comment-text (string-ascii 256)))
+  ;; Comment length security limit
+  (<= (len comment-text) u200)
+)
+
+;; INSTITUTIONAL ONBOARDING & MANAGEMENT
+
+;; Onboards new educational institutions with stake-based security
+(define-public (register-institution (name (string-ascii 64)))
+  (let ((caller tx-sender))
+    (asserts!
+      (not (default-to false (get active (map-get? institutions caller))))
+      ERR-ALREADY-REGISTERED
+    )
+    (asserts! (validate-non-empty-string name) ERR-EMPTY-STRING)
+    (try! (stx-transfer? MINIMUM-STAKE caller (as-contract tx-sender)))
+
+    (map-set institutions caller {
+      name: name,
+      stake-amount: MINIMUM-STAKE,
+      credentials-issued: u0,
+      reputation-score: u100,
+      active: true,
+      suspension-status: false,
+      registration-date: stacks-block-height,
+      last-update: stacks-block-height,
+    })
+
+    (var-set total-institutions (+ (var-get total-institutions) u1))
+    (ok true)
+  )
+)
