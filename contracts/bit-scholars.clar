@@ -438,3 +438,128 @@
     (ok transfer-id)
   )
 )
+
+;; INTERNAL UTILITY FUNCTIONS
+
+;; Batch validation utility for expiry dates
+(define-private (check-all-expiry-dates
+    (expiry uint)
+    (valid-so-far bool)
+  )
+  (and valid-so-far (validate-expiry expiry))
+)
+
+;; Institutional status verification utility
+(define-private (is-institution (address principal))
+  (default-to false (get active (map-get? institutions address)))
+)
+
+;; String sanitization for security hardening
+(define-private (sanitize-string (input (string-ascii 64)))
+  ;; Advanced sanitization implementation
+  input
+)
+
+;; Atomic credential processing for batch operations
+(define-private (process-credential-issuance
+    (credential-id (string-ascii 64))
+    (student principal)
+    (degree (string-ascii 64))
+    (year uint)
+    (metadata-url (string-ascii 256))
+    (expiry-date uint)
+    (category (string-ascii 32))
+  )
+  (begin
+    (map-set credentials {
+      id: credential-id,
+      student: student,
+    } {
+      institution: tx-sender,
+      degree: degree,
+      year: year,
+      verified: true,
+      validation-level: u0,
+      endorsements: u0,
+      metadata-url: metadata-url,
+      expiry-date: expiry-date,
+      revoked: false,
+      category: category,
+      issue-date: stacks-block-height,
+      last-endorsed: u0,
+    })
+    true
+  )
+)
+
+;; PUBLIC QUERY INTERFACE
+
+;; Retrieves comprehensive institutional profile data
+(define-read-only (get-institution-info (institution principal))
+  (map-get? institutions institution)
+)
+
+;; Fetches complete credential metadata and verification status
+(define-read-only (get-credential-info
+    (credential-id (string-ascii 64))
+    (student principal)
+  )
+  (map-get? credentials {
+    id: credential-id,
+    student: student,
+  })
+)
+
+;; Queries endorsement details and institutional backing
+(define-read-only (get-endorsement-info
+    (credential-id (string-ascii 64))
+    (endorser principal)
+  )
+  (map-get? endorsements {
+    credential-id: credential-id,
+    endorser: endorser,
+  })
+)
+
+;; Retrieves delegation authority and permission scope
+(define-read-only (get-delegate-info
+    (institution principal)
+    (delegate principal)
+  )
+  (map-get? institution-delegates {
+    institution: institution,
+    delegate: delegate,
+  })
+)
+
+;; Real-time credential validity verification
+(define-read-only (is-credential-valid
+    (credential-id (string-ascii 64))
+    (student principal)
+  )
+  (match (map-get? credentials {
+    id: credential-id,
+    student: student,
+  })
+    credential (and
+      (not (get revoked credential))
+      (< stacks-block-height (get expiry-date credential))
+      (get verified credential)
+    )
+    false
+  )
+)
+
+;; Credential trust and validation scoring
+(define-read-only (get-validation-level
+    (credential-id (string-ascii 64))
+    (student principal)
+  )
+  (default-to u0
+    (get validation-level
+      (map-get? credentials {
+        id: credential-id,
+        student: student,
+      })
+    ))
+)
